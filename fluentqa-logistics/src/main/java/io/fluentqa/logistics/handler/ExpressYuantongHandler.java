@@ -1,0 +1,199 @@
+package io.fluentqa.logistics.handler;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONException;
+import com.alibaba.fastjson.TypeReference;
+import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import io.fluentqa.logistics.config.*;
+import io.fluentqa.logistics.constant.*;
+import io.fluentqa.logistics.enums.ExpressCompanyCodeEnum;
+import io.fluentqa.logistics.enums.ExpressStateEnum;
+import io.fluentqa.logistics.model.*;
+import io.fluentqa.logistics.model.yto.*;
+import io.fluentqa.logistics.model.yto.*;
+import io.fluentqa.logistics.request.*;
+import io.fluentqa.logistics.utils.StringUtils;
+
+/**
+ * 圆通.
+ *
+ * @author Ze.Wang
+ * @since 0.0.1
+ */
+public class ExpressYuantongHandler implements ExpressHandler {
+
+    private YuantongRequest yuantongRequest;
+
+    public ExpressYuantongHandler(YuantongConfig yuantongConfig) {
+        this.yuantongRequest = new YuantongRequest(yuantongConfig);
+    }
+
+    /**
+     * 查询轨迹信息.
+     *
+     * @param expressParam 快递号、手机、快递公司编码
+     * @return 查询接口
+     */
+    @Override
+    public ExpressResponse<List<ExpressResult>> getExpressInfo(ExpressParam expressParam) {
+
+        List<ExpressResult> expressResults = new ArrayList<>();
+        for (String expressNo : expressParam.getExpressNos()) {
+            Map<String, Object>[] paramItemsMap = new Map[1];
+            paramItemsMap[0] = new HashMap<>(1);
+            paramItemsMap[0].put("Number", expressNo);
+            String param = null;
+            try {
+                param = URLEncoder.encode(JSON.toJSONString(paramItemsMap), "UTF-8");
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+            String responseData =
+                yuantongRequest.queryRouteRequest(param, expressParam.getFormat());
+            ExpressResult expressResult = disposeResult(responseData, expressNo, expressParam);
+            expressResults.add(expressResult);
+        }
+        return ExpressResponse.ok(expressResults);
+    }
+
+    /**
+     * 结果处理.
+     *
+     * @param responseData 响应
+     * @return 处理结果
+     */
+    private ExpressResult disposeResult(String responseData, String expressNo,
+                                        ExpressParam expressParam) {
+
+        ExpressResult expressResult = new ExpressResult();
+        if (expressParam.isViewOriginal()) {
+            expressResult.setOriginalResult(responseData);
+        }
+        expressResult.setCom(ExpressCompanyCodeEnum.YTO.getValue());
+        expressResult.setNu(expressNo);
+
+        try {
+            List<YuanTongResult> routes =
+                JSON.parseObject(responseData, new TypeReference<ArrayList<YuanTongResult>>() {
+                });
+            if (routes == null || routes.size() == 0) {
+                expressResult.setState(ExpressStateEnum.NO_INFO.getValue());
+                expressResult.setMsg(CommonConstant.NO_INFO);
+                return expressResult;
+            }
+            //官方默认正序，改为倒序
+            Collections.reverse(routes);
+            ExpressData latestData = routes.get(0);
+            if (expressParam.isViewRoute()) {
+                List<ExpressData> data = new ArrayList<>(routes.size());
+                data.addAll(routes);
+                expressResult.setData(data);
+            }
+
+            expressResult.setState(latestData.getStatus());
+            if (ExpressStateEnum.SIGNED.getValue().equals(expressResult.getState())) {
+                expressResult.setIscheck(CommonConstant.YES);
+            }
+            return expressResult;
+        } catch (JSONException e) {
+            YuanTongErrorResult errorResult = new YuanTongErrorResult();
+            expressResult.setState(ExpressStateEnum.NO_INFO.getValue());
+            try {
+                errorResult = JSON.parseObject(responseData, YuanTongErrorResult.class);
+            } catch (JSONException e2) {
+                String messageStart = "<reason>";
+                String messageEnd = "</reason>";
+                int strStartIndex = responseData.indexOf(messageStart);
+                int strEndIndex = responseData.indexOf(messageEnd);
+                String result =
+                    responseData.substring(strStartIndex, strEndIndex)
+                        .substring(messageStart.length());
+                errorResult.setReason(result);
+            }
+            expressResult.setMsg(
+                StringUtils.isNotEmpty(errorResult.getMessage()) ? errorResult.getMessage() :
+                    errorResult.getReason());
+            return expressResult;
+        }
+    }
+
+    /**
+     * 运费预估.
+     *
+     * @param expressPriceParam 起始省份、起始城市、目的身份、目的城市、重量、长、宽、高
+     * @return 运费
+     */
+    @Override
+    public ExpressResponse<ExpressPriceResult> getExpressPrice(
+        ExpressPriceParam expressPriceParam) {
+        Map<String, Object>[] paramItemsMap = new Map[1];
+        paramItemsMap[0] = new HashMap<>(1);
+        paramItemsMap[0].put("StartProvince", expressPriceParam.getStartProvince());
+        paramItemsMap[0].put("StartCity", expressPriceParam.getStartCity());
+        paramItemsMap[0].put("EndProvince", expressPriceParam.getEndProvince());
+        paramItemsMap[0].put("EndCity", expressPriceParam.getEndCity());
+        paramItemsMap[0].put("GoodsWeight", expressPriceParam.getWeight());
+        paramItemsMap[0].put("GoodsLength", expressPriceParam.getLength());
+        paramItemsMap[0].put("GoodsWidth", expressPriceParam.getWidth());
+        paramItemsMap[0].put("GoodsHeight", expressPriceParam.getHeight());
+        String param = null;
+        try {
+            param = URLEncoder.encode(JSON.toJSONString(paramItemsMap), "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        String responseData =
+            yuantongRequest.queryPriceRequest(param, expressPriceParam.getFormat());
+        try {
+            BigDecimal price = new BigDecimal(responseData).setScale(2);
+            ExpressPriceResult expressPriceResult = new ExpressPriceResult();
+            expressPriceResult.setPrice(price);
+            return ExpressResponse.ok(expressPriceResult);
+        } catch (NumberFormatException e) {
+            try {
+                YuanTongErrorResult errorResult =
+                    JSON.parseObject(responseData, YuanTongErrorResult.class);
+                return ExpressResponse.failed(errorResult.getReason());
+            } catch (JSONException e2) {
+                String messageStart = "<reason>";
+                String messageEnd = "</reason>";
+                int strStartIndex = responseData.indexOf(messageStart);
+                int strEndIndex = responseData.indexOf(messageEnd);
+                String result =
+                    responseData.substring(strStartIndex, strEndIndex)
+                        .substring(messageStart.length());
+                return ExpressResponse.failed(result);
+            }
+        }
+    }
+
+    /**
+     * 创建订单.
+     *
+     * @param createOrderParam 下单参数，主要包含物品信息、收件人信息、寄件人信息等
+     * @return 快递单号等信息
+     */
+    @Override
+    public ExpressResponse<OrderResult> createOrder(CreateOrderParam createOrderParam) {
+        return ExpressResponse.failed(CommonConstant.NO_SOPPORT);
+    }
+
+    /**
+     * 获取当前快递公司编码.
+     *
+     * @return 快递公司编码
+     */
+    @Override
+    public String getExpressCompanyCode() {
+        return ExpressCompanyCodeEnum.YTO.getValue();
+    }
+
+}
+

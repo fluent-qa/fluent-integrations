@@ -12,7 +12,7 @@
         <module>qabox-feishu</module>
         <module>qabox-vika</module>
         <module>qabox-openai</module>
-        <module>qabox-demos</module>
+        <module>fluentqa-logistics</module>
     </modules>
 
     <properties>

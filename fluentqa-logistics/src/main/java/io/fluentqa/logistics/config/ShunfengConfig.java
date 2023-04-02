@@ -1,0 +1,26 @@
+package io.fluentqa.logistics.config;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * 顺丰快递配置.
+ *
+ * <p>API配置,包含[partnerId,requestId,checkWord],isProduct标识测试与生产环境<br>
+ * 配置获取:<em><a href="http://qiao.sf-express.com/">顺丰开放平台</a></em>
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ShunfengConfig {
+
+    private String partnerId;
+    private String requestId;
+    private String checkWord;
+
+    private int isProduct = 1;
+
+}
