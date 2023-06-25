@@ -13,6 +13,7 @@
         <module>qabox-vika</module>
         <module>qabox-openai</module>
         <module>fluentqa-logistics</module>
+        <module>fluentqa-poitl</module>
     </modules>
 
     <properties>
