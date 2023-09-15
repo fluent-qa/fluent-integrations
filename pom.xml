@@ -13,7 +13,9 @@
         <module>qabox-vika</module>
         <module>qabox-openai</module>
         <module>fluentqa-logistics</module>
-        <module>fluentqa-poitl</module>
+        <module>qabox-gitlab</module>
+        <module>qabox-crowd</module>
+        <module>qabox-allure-cli</module>
     </modules>
 
     <properties>
