@@ -15,7 +15,8 @@
         <module>fluentqa-logistics</module>
         <module>qabox-gitlab</module>
         <module>qabox-crowd</module>
-        <module>qabox-allure-cli</module>
+        <module>qabox-jira</module>
+        <!--        <module>qabox-allure-cli</module>-->
     </modules>
 
     <properties>
